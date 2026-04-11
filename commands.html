@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <title>AssistDMS Commands</title>
+    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <script src="config.js"></script>
+    <script type="text/javascript">
+        const API_BASE = API_CONFIG.baseUrl;
+
+        Office.onReady(() => {
+            // Commands ready
+        });
+
+        // Quick action: Create ticket from email
+        async function createTicketFromEmail(event) {
+            const item = Office.context.mailbox.item;
+            
+            // Get email details
+            item.subject.getAsync(async (subjectResult) => {
+                if (subjectResult.status !== Office.AsyncResultStatus.Succeeded) {
+                    event.completed();
+                    return;
+                }
+                
+                const subject = subjectResult.value;
+                
+                item.from.getAsync(async (fromResult) => {
+                    if (fromResult.status !== Office.AsyncResultStatus.Succeeded) {
+                        event.completed();
+                        return;
+                    }
+                    
+                    const from = fromResult.value;
+                    
+                    item.internetMessageId.getAsync(async (messageIdResult) => {
+                        const messageId = messageIdResult.value;
+                        
+                        try {
+                            // Get first customer (for demo - in real app, let user choose)
+                            const customers = await apiCall('/customers');
+                            
+                            if (customers.length === 0) {
+                                Office.context.mailbox.item.notificationMessages.addAsync("noCustomer", {
+                                    type: "errorMessage",
+                                    message: "Geen klanten gevonden. Maak eerst een klant aan."
+                                });
+                                event.completed();
+                                return;
+                            }
+                            
+                            // Create ticket
+                            const ticket = await apiCall('/tickets', 'POST', {
+                                customerId: customers[0].id,
+                                title: subject,
+                                archiveMailboxOverride: null
+                            });
+                            
+                            // Link email to ticket
+                            await apiCall(`/tickets/${ticket.id}/mails`, 'POST', {
+                                subject: subject,
+                                outlookMessageId: messageId
+                            });
+                            
+                            // Show success notification
+                            Office.context.mailbox.item.notificationMessages.addAsync("success", {
+                                type: "informationalMessage",
+                                message: `Ticket ${ticket.number} aangemaakt en email gekoppeld!`,
+                                icon: "icon16",
+                                persistent: false
+                            });
+                            
+                        } catch (error) {
+                            Office.context.mailbox.item.notificationMessages.addAsync("error", {
+                                type: "errorMessage",
+                                message: "Fout bij aanmaken ticket: " + error.message
+                            });
+                        }
+                        
+                        event.completed();
+                    });
+                });
+            });
+        }
+
+        async function apiCall(endpoint, method = 'GET', body = null) {
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            };
+            
+            if (body) {
+                options.body = JSON.stringify(body);
+            }
+            
+            const response = await fetch(`${API_BASE}${endpoint}`, options);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || `HTTP ${response.status}`);
+            }
+            
+            return await response.json();
+        }
+        
+        Office.actions.associate("createTicketFromEmail", createTicketFromEmail);
+    </script>
+</head>
+<body>
+    <!-- This page provides the command functions -->
+</body>
+</html>
