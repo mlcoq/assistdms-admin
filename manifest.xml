@@ -13,8 +13,8 @@
   <DefaultLocale>nl-NL</DefaultLocale>
   <DisplayName DefaultValue="AssistDMS"/>
   <Description DefaultValue="Document Management System voor Outlook"/>
-  <IconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-64.png"/>
-  <HighResolutionIconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-128.png"/>
+  <IconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-80.png"/>
   <SupportUrl DefaultValue="https://mlcoq.github.io/assistdms-admin"/>
   
   <!-- End Basic Settings -->
