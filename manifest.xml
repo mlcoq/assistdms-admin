@@ -6,18 +6,21 @@
   xmlns:mailappor="http://schemas.microsoft.com/office/mailappversionoverrides/1.0"
   xsi:type="MailApp">
 
-  <!-- Begin Basic Settings -->
   <Id>a811c8e3-5f6d-4c9b-9e2a-1d3c4b5a6e7f</Id>
   <Version>1.0.0.0</Version>
   <ProviderName>AssistDMS</ProviderName>
-  <DefaultLocale>nl-NL</DefaultLocale>
+  <DefaultLocale>en-US</DefaultLocale>
+
   <DisplayName DefaultValue="AssistDMS"/>
-  <Description DefaultValue="Document Management System voor Outlook"/>
+  <Description DefaultValue="Document Management System for Outlook"/>
+
   <IconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-32.png"/>
   <HighResolutionIconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-80.png"/>
   <SupportUrl DefaultValue="https://mlcoq.github.io/assistdms-admin"/>
-  
-  <!-- End Basic Settings -->
+
+  <AppDomains>
+    <AppDomain>https://mlcoq.github.io</AppDomain>
+  </AppDomains>
 
   <Hosts>
     <Host Name="Mailbox"/>
@@ -58,7 +61,8 @@
       <Hosts>
         <Host xsi:type="MailHost">
           <DesktopFormFactor>
-            <!-- Message Read -->
+            <FunctionFile resid="Commands.Url"/>
+
             <ExtensionPoint xsi:type="MessageReadCommandSurface">
               <OfficeTab id="TabDefault">
                 <Group id="msgReadGroup">
@@ -69,7 +73,6 @@
                     <bt:Image size="80" resid="Icon.80x80"/>
                   </Icon>
 
-                  <!-- Taskpane Button -->
                   <Control xsi:type="Button" id="msgReadOpenPaneButton">
                     <Label resid="TaskpaneButton.Label"/>
                     <Supertip>
@@ -86,7 +89,6 @@
                     </Action>
                   </Control>
 
-                  <!-- Create Ticket Button -->
                   <Control xsi:type="Button" id="ActionButton">
                     <Label resid="ActionButton.Label"/>
                     <Supertip>
@@ -106,9 +108,6 @@
                 </Group>
               </OfficeTab>
             </ExtensionPoint>
-
-            <!-- Go to https://aka.ms/ExtensionPointsCommands to learn more -->
-            <FunctionFile resid="Commands.Url"/>
           </DesktopFormFactor>
         </Host>
       </Hosts>
@@ -126,11 +125,11 @@
         <bt:ShortStrings>
           <bt:String id="GroupLabel" DefaultValue="AssistDMS"/>
           <bt:String id="TaskpaneButton.Label" DefaultValue="AssistDMS"/>
-          <bt:String id="ActionButton.Label" DefaultValue="Nieuw Ticket"/>
+          <bt:String id="ActionButton.Label" DefaultValue="New Ticket"/>
         </bt:ShortStrings>
         <bt:LongStrings>
-          <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open AssistDMS paneel"/>
-          <bt:String id="ActionButton.Tooltip" DefaultValue="Maak nieuw ticket van deze email"/>
+          <bt:String id="TaskpaneButton.Tooltip" DefaultValue="Open AssistDMS panel"/>
+          <bt:String id="ActionButton.Tooltip" DefaultValue="Create new ticket from this email"/>
         </bt:LongStrings>
       </Resources>
 
