@@ -13,9 +13,9 @@
   <DefaultLocale>nl-NL</DefaultLocale>
   <DisplayName DefaultValue="AssistDMS"/>
   <Description DefaultValue="Document Management System voor Outlook"/>
-  <IconUrl DefaultValue="https://mlcoq.github.io/assistdms-addin/icon-64.png"/>
-  <HighResolutionIconUrl DefaultValue="https://mlcoq.github.io/assistdms-addin/icon-128.png"/>
-  <SupportUrl DefaultValue="https://mlcoq.github.io/assistdms-addin"/>
+  <IconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://mlcoq.github.io/assistdms-admin/icon-128.png"/>
+  <SupportUrl DefaultValue="https://mlcoq.github.io/assistdms-admin"/>
   
   <!-- End Basic Settings -->
 
@@ -32,7 +32,7 @@
   <FormSettings>
     <Form xsi:type="ItemRead">
       <DesktopSettings>
-        <SourceLocation DefaultValue="https://mlcoq.github.io/assistdms-addin/taskpane.html"/>
+        <SourceLocation DefaultValue="https://mlcoq.github.io/assistdms-admin/taskpane.html"/>
         <RequestedHeight>250</RequestedHeight>
       </DesktopSettings>
     </Form>
@@ -120,8 +120,8 @@
           <bt:Image id="Icon.80x80" DefaultValue="https://localhost:5001/assets/icon-80.png"/>
         </bt:Images>
         <bt:Urls>
-          <bt:Url id="Commands.Url" DefaultValue="https://mlcoq.github.io/assistdms-addin/commands.html"/>
-          <bt:Url id="Taskpane.Url" DefaultValue="https://mlcoq.github.io/assistdms-addin/taskpane.html"/>
+          <bt:Url id="Commands.Url" DefaultValue="https://mlcoq.github.io/assistdms-admin/commands.html"/>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://mlcoq.github.io/assistdms-admin/taskpane.html"/>
         </bt:Urls>
         <bt:ShortStrings>
           <bt:String id="GroupLabel" DefaultValue="AssistDMS"/>
