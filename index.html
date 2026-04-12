@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AssistDMS - Ticket Management</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { opacity: 0.9; }
+        
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: none;
+            background: none;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .tab:hover { background: #e0e0e0; }
+        .tab.active { background: white; border-bottom: 3px solid #667eea; }
+        
+        .content {
+            padding: 30px;
+            display: none;
+        }
+        
+        .content.active { display: block; }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .form-group textarea { min-height: 100px; resize: vertical; }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:active { transform: translateY(0); }
+        
+        .btn-secondary {
+            background: #6c757d;
+            margin-left: 10px;
+        }
+        
+        .card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .card h3 { margin-bottom: 10px; color: #333; }
+        .card p { color: #666; margin: 5px 0; }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+        
+        .badge.open { background: #28a745; color: white; }
+        .badge.closed { background: #6c757d; color: white; }
+        .badge.archived { background: #17a2b8; color: white; }
+        
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; display: block; }
+        .status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; display: block; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .tabs { flex-direction: column; }
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 AssistDMS</h1>
+            <p>Ticket & Email Management System</p>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('tickets')">Tickets</button>
+            <button class="tab" onclick="showTab('new-ticket')">Nieuw Ticket</button>
+            <button class="tab" onclick="showTab('customers')">Klanten</button>
+            <button class="tab" onclick="showTab('email')">Email Koppelen</button>
+        </div>
+        
+        <!-- Tickets Tab -->
+        <div id="tickets" class="content active">
+            <h2>Mijn Tickets</h2>
+            <div id="status-tickets" class="status"></div>
+            <div id="tickets-list" class="loading">Laden...</div>
+        </div>
+        
+        <!-- New Ticket Tab -->
+        <div id="new-ticket" class="content">
+            <h2>Nieuw Ticket Aanmaken</h2>
+            <div id="status-new-ticket" class="status"></div>
+            
+            <div class="form-group">
+                <label>Klant *</label>
+                <select id="customer-select" required>
+                    <option value="">Selecteer klant...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Onderwerp *</label>
+                <input type="text" id="ticket-subject" placeholder="Korte beschrijving van het probleem" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Beschrijving</label>
+                <textarea id="ticket-description" placeholder="Uitgebreide beschrijving..."></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Email info (optioneel - kopieer uit Outlook)</label>
+                <input type="text" id="email-subject" placeholder="Email onderwerp">
+                <input type="text" id="email-from" placeholder="Van (email adres)" style="margin-top:10px">
+                <input type="text" id="email-id" placeholder="Message ID (optioneel)" style="margin-top:10px">
+            </div>
+            
+            <button class="btn" onclick="createTicket()">Ticket Aanmaken</button>
+        </div>
+        
+        <!-- Customers Tab -->
+        <div id="customers" class="content">
+            <h2>Klanten Beheer</h2>
+            <div id="status-customers" class="status"></div>
+            
+            <div class="card">
+                <h3>Nieuwe Klant</h3>
+                <div class="grid">
+                    <div class="form-group">
+                        <label>Naam *</label>
+                        <input type="text" id="customer-name" placeholder="Bedrijfsnaam" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email *</label>
+                        <input type="email" id="customer-email" placeholder="info@bedrijf.nl" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Archief Mailbox (optioneel)</label>
+                    <input type="email" id="customer-archive" placeholder="archief@bedrijf.nl">
+                </div>
+                <button class="btn" onclick="createCustomer()">Klant Toevoegen</button>
+            </div>
+            
+            <h3 style="margin-top:30px">Bestaande Klanten</h3>
+            <div id="customers-list" class="loading">Laden...</div>
+        </div>
+        
+        <!-- Email Link Tab -->
+        <div id="email" class="content">
+            <h2>Email aan Ticket Koppelen</h2>
+            <div id="status-email" class="status"></div>
+            
+            <p style="color:#666; margin-bottom:20px">
+                Kopieer email info uit Outlook en koppel aan een bestaand ticket
+            </p>
+            
+            <div class="form-group">
+                <label>Ticket *</label>
+                <select id="ticket-select" required>
+                    <option value="">Selecteer ticket...</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Email Onderwerp *</label>
+                <input type="text" id="link-email-subject" placeholder="Kopieer onderwerp uit Outlook" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Van (Email) *</label>
+                <input type="email" id="link-email-from" placeholder="afzender@email.com" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Message ID (optioneel)</label>
+                <input type="text" id="link-email-id" placeholder="<message-id@server.com>">
+            </div>
+            
+            <button class="btn" onclick="linkEmail()">Email Koppelen</button>
+            <button class="btn btn-secondary" onclick="archiveEmail()">Koppelen & Archiveren</button>
+        </div>
+    </div>
+    
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
