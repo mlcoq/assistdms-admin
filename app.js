@@ -53,16 +53,15 @@ async function loadTickets() {
 // Render customers
 function renderCustomers() {
     const list = document.getElementById('customers-list');
-    
+
     if (customers.length === 0) {
         list.innerHTML = '<div class="empty-state">📭 Nog geen klanten</div>';
         return;
     }
-    
+
     list.innerHTML = customers.map(customer => `
         <div class="card">
             <h3>${customer.name}</h3>
-            <p>✉️ ${customer.email}</p>
             ${customer.defaultArchiveMailbox ? `<p>📂 Archief: ${customer.defaultArchiveMailbox}</p>` : ''}
         </div>
     `).join('');
@@ -116,11 +115,10 @@ function populateTicketSelect() {
 // Create customer
 async function createCustomer() {
     const name = document.getElementById('customer-name').value.trim();
-    const email = document.getElementById('customer-email').value.trim();
     const archive = document.getElementById('customer-archive').value.trim();
-    
-    if (!name || !email) {
-        showStatus('customers', 'Naam en email zijn verplicht', 'error');
+
+    if (!name) {
+        showStatus('customers', 'Naam is verplicht', 'error');
         return;
     }
     
@@ -129,19 +127,20 @@ async function createCustomer() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                name,
-                email,
-                defaultArchiveMailbox: archive || null
+                Name: name,
+                DefaultArchiveMailbox: archive || null
             })
         });
-        
-        if (!response.ok) throw new Error('Fout bij aanmaken klant');
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error: ${errorText}`);
+        }
         
         showStatus('customers', `✅ Klant "${name}" aangemaakt!`, 'success');
-        
+
         // Clear form
         document.getElementById('customer-name').value = '';
-        document.getElementById('customer-email').value = '';
         document.getElementById('customer-archive').value = '';
         
         // Reload
@@ -157,9 +156,8 @@ async function createTicket() {
     const customerId = document.getElementById('customer-select').value;
     const subject = document.getElementById('ticket-subject').value.trim();
     const description = document.getElementById('ticket-description').value.trim();
-    
+
     const emailSubject = document.getElementById('email-subject').value.trim();
-    const emailFrom = document.getElementById('email-from').value.trim();
     const emailId = document.getElementById('email-id').value.trim();
     
     if (!customerId || !subject) {
@@ -173,38 +171,42 @@ async function createTicket() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                customerId: parseInt(customerId),
-                subject,
-                description: description || null
+                CustomerId: customerId,
+                Title: subject,
+                ArchiveMailboxOverride: null
             })
         });
-        
-        if (!ticketResponse.ok) throw new Error('Fout bij aanmaken ticket');
+
+        if (!ticketResponse.ok) {
+            const errorText = await ticketResponse.text();
+            throw new Error(`Fout bij aanmaken ticket: ${errorText}`);
+        }
         
         const ticket = await ticketResponse.json();
-        
+
         // Link email if provided
-        if (emailSubject && emailFrom) {
-            await fetch(`${API_URL}/tickets/${ticket.id}/mails`, {
+        if (emailSubject) {
+            const mailResponse = await fetch(`${API_URL}/tickets/${ticket.id}/mails`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    subject: emailSubject,
-                    from: emailFrom,
-                    messageId: emailId || null,
-                    receivedAt: new Date().toISOString()
+                    Subject: emailSubject,
+                    OutlookMessageId: emailId || null
                 })
             });
+
+            if (!mailResponse.ok) {
+                console.warn('Email koppelen mislukt, maar ticket is aangemaakt');
+            }
         }
         
         showStatus('new-ticket', `✅ Ticket "${subject}" aangemaakt!`, 'success');
-        
+
         // Clear form
         document.getElementById('customer-select').value = '';
         document.getElementById('ticket-subject').value = '';
         document.getElementById('ticket-description').value = '';
         document.getElementById('email-subject').value = '';
-        document.getElementById('email-from').value = '';
         document.getElementById('email-id').value = '';
         
         // Reload tickets
@@ -224,11 +226,10 @@ async function createTicket() {
 async function linkEmail() {
     const ticketId = document.getElementById('ticket-select').value;
     const subject = document.getElementById('link-email-subject').value.trim();
-    const from = document.getElementById('link-email-from').value.trim();
     const messageId = document.getElementById('link-email-id').value.trim();
-    
-    if (!ticketId || !subject || !from) {
-        showStatus('email', 'Ticket, onderwerp en afzender zijn verplicht', 'error');
+
+    if (!ticketId || !subject) {
+        showStatus('email', 'Ticket en onderwerp zijn verplicht', 'error');
         return;
     }
     
@@ -237,21 +238,21 @@ async function linkEmail() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                subject,
-                from,
-                messageId: messageId || null,
-                receivedAt: new Date().toISOString()
+                Subject: subject,
+                OutlookMessageId: messageId || null
             })
         });
-        
-        if (!response.ok) throw new Error('Fout bij koppelen email');
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API error: ${errorText}`);
+        }
         
         showStatus('email', '✅ Email gekoppeld aan ticket!', 'success');
-        
+
         // Clear form
         document.getElementById('ticket-select').value = '';
         document.getElementById('link-email-subject').value = '';
-        document.getElementById('link-email-from').value = '';
         document.getElementById('link-email-id').value = '';
         
         await loadTickets();
