@@ -137,6 +137,41 @@ async function getToken() {
     }
 }
 
+// Get token specifically for Microsoft Graph API
+async function getGraphToken() {
+    console.log('getGraphToken() called');
+
+    if (!account) {
+        console.error('No account available for Graph token request');
+        return null;
+    }
+
+    const graphTokenRequest = {
+        scopes: ['Mail.Read', 'Mail.ReadWrite'],
+        account: account
+    };
+
+    try {
+        console.log('Attempting acquireTokenSilent for Graph API...');
+        const response = await msalInstance.acquireTokenSilent(graphTokenRequest);
+        console.log('Graph token acquired silently, length:', response.accessToken?.length);
+        return response.accessToken;
+    } catch (error) {
+        console.warn('Silent Graph token acquisition failed:', error);
+
+        // Try interactive token acquisition with popup
+        try {
+            console.log('Attempting acquireTokenPopup for Graph API...');
+            const response = await msalInstance.acquireTokenPopup(graphTokenRequest);
+            console.log('Graph token acquired via popup, length:', response.accessToken?.length);
+            return response.accessToken;
+        } catch (popupError) {
+            console.error('Popup Graph token acquisition failed:', popupError);
+            throw popupError;
+        }
+    }
+}
+
 function showLoginOverlay() {
     document.getElementById('login-overlay').style.display = 'flex';
 }
@@ -487,24 +522,32 @@ async function loadEmails() {
     try {
         document.getElementById('emails-list').innerHTML = '<div class="loading">Emails laden...</div>';
 
-        // Get token with Mail.Read scope
-        if (!accessToken) {
-            await getToken();
+        // Get token specifically for Graph API
+        const graphToken = await getGraphToken();
+
+        if (!graphToken) {
+            throw new Error('Kon geen Graph API token verkrijgen');
         }
+
+        console.log('Calling Graph API with token...');
 
         // Call Microsoft Graph API to get emails
         const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me/messages?$top=50&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,bodyPreview,categories,internetMessageId', {
             headers: {
-                'Authorization': `Bearer ${accessToken}`
+                'Authorization': `Bearer ${graphToken}`
             }
         });
 
         if (!graphResponse.ok) {
-            throw new Error(`Graph API error: ${graphResponse.status}`);
+            const errorText = await graphResponse.text();
+            console.error('Graph API error response:', errorText);
+            throw new Error(`Graph API error: ${graphResponse.status} - ${errorText}`);
         }
 
         const data = await graphResponse.json();
         emails = data.value;
+
+        console.log(`Loaded ${emails.length} emails from Graph API`);
 
         // Filter based on checkbox
         let displayEmails = emails;
@@ -597,8 +640,11 @@ async function linkEmail() {
 // Add AssistDMS category to email
 async function addCategoryToEmail(emailId) {
     try {
-        if (!accessToken) {
-            await getToken();
+        const graphToken = await getGraphToken();
+
+        if (!graphToken) {
+            console.error('No Graph token available');
+            return;
         }
 
         // Get current categories
@@ -609,11 +655,13 @@ async function addCategoryToEmail(emailId) {
         if (!currentCategories.includes(ASSISTDMS_CATEGORY)) {
             const newCategories = [...currentCategories, ASSISTDMS_CATEGORY];
 
+            console.log('Adding category to email:', emailId);
+
             // Update via Graph API
             const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${emailId}`, {
                 method: 'PATCH',
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    'Authorization': `Bearer ${graphToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -622,9 +670,10 @@ async function addCategoryToEmail(emailId) {
             });
 
             if (!response.ok) {
-                console.error('Failed to add category:', await response.text());
+                const errorText = await response.text();
+                console.error('Failed to add category:', errorText);
             } else {
-                console.log('✅ Category added to email in Outlook');
+                console.log('✅ Category "' + ASSISTDMS_CATEGORY + '" added to email in Outlook');
             }
         }
 
