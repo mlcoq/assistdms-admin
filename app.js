@@ -65,7 +65,8 @@ async function initAuth() {
             }
         }
 
-        // Show user info
+        // Hide login overlay and show user info
+        document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('user-info').textContent = `👤 ${account.name}`;
         console.log('Access token available:', !!accessToken);
 
