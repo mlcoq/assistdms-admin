@@ -1,24 +1,139 @@
-// AssistDMS Standalone Web App
+// AssistDMS Standalone Web App with Azure AD Authentication
 const API_URL = API_CONFIG.baseUrl;
+
+// MSAL Configuration
+const msalConfig = {
+    auth: {
+        clientId: '9635361b-5007-4fa8-8661-c78cb3a1402f',
+        authority: 'https://login.microsoftonline.com/e2e6f0bc-a094-4bb3-9250-1975a8102eeb',
+        redirectUri: window.location.origin + window.location.pathname
+    },
+    cache: {
+        cacheLocation: 'localStorage',
+        storeAuthStateInCookie: false
+    }
+};
+
+const loginRequest = {
+    scopes: ['api://9635361b-5007-4fa8-8661-c78cb3a1402f/access_as_user']
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+let accessToken = null;
+let account = null;
 
 // State
 let customers = [];
 let tickets = [];
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    loadCustomers();
-    loadTickets();
+document.addEventListener('DOMContentLoaded', async () => {
+    await initAuth();
 });
 
+// Authentication
+async function initAuth() {
+    try {
+        await msalInstance.initialize();
+
+        // Handle redirect response
+        const response = await msalInstance.handleRedirectPromise();
+        if (response) {
+            account = response.account;
+            await getToken();
+        } else {
+            // Check if user is already logged in
+            const accounts = msalInstance.getAllAccounts();
+            if (accounts.length > 0) {
+                account = accounts[0];
+                await getToken();
+            } else {
+                showLoginOverlay();
+                return;
+            }
+        }
+
+        // Show user info
+        document.getElementById('user-info').textContent = `👤 ${account.name}`;
+
+        // Load data
+        loadCustomers();
+        loadTickets();
+
+    } catch (error) {
+        console.error('Auth error:', error);
+        showLoginOverlay();
+    }
+}
+
+async function login() {
+    try {
+        await msalInstance.loginRedirect(loginRequest);
+    } catch (error) {
+        console.error('Login error:', error);
+        document.getElementById('login-error').textContent = 'Login failed: ' + error.message;
+        document.getElementById('login-error').style.display = 'block';
+    }
+}
+
+async function logout() {
+    await msalInstance.logoutRedirect({
+        account: account
+    });
+}
+
+async function getToken() {
+    const tokenRequest = {
+        scopes: loginRequest.scopes,
+        account: account
+    };
+
+    try {
+        const response = await msalInstance.acquireTokenSilent(tokenRequest);
+        accessToken = response.accessToken;
+    } catch (error) {
+        console.error('Token error:', error);
+        await msalInstance.acquireTokenRedirect(tokenRequest);
+    }
+}
+
+function showLoginOverlay() {
+    document.getElementById('login-overlay').style.display = 'flex';
+}
+
+// Authenticated fetch wrapper
+async function authFetch(url, options = {}) {
+    if (!accessToken) {
+        await getToken();
+    }
+
+    const headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${accessToken}`
+    };
+
+    const response = await fetch(url, { ...options, headers });
+
+    if (response.status === 401) {
+        // Token expired, get new one
+        await getToken();
+        headers['Authorization'] = `Bearer ${accessToken}`;
+        return fetch(url, { ...options, headers });
+    }
+
+    return response;
+}
+
 // Tab switching
-function showTab(tabName) {
+function showTab(tabName, event) {
     document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.content').forEach(content => content.classList.remove('active'));
-    
-    event.target.classList.add('active');
+
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     document.getElementById(tabName).classList.add('active');
-    
+
     // Clear status messages
     document.querySelectorAll('.status').forEach(s => s.style.display = 'none');
 }
@@ -26,7 +141,7 @@ function showTab(tabName) {
 // Load customers
 async function loadCustomers() {
     try {
-        const response = await fetch(`${API_URL}/customers`);
+        const response = await authFetch(`${API_URL}/customers`);
         customers = await response.json();
         
         renderCustomers();
@@ -39,7 +154,7 @@ async function loadCustomers() {
 // Load tickets
 async function loadTickets() {
     try {
-        const response = await fetch(`${API_URL}/tickets`);
+        const response = await authFetch(`${API_URL}/tickets`);
         tickets = await response.json();
         
         renderTickets();
@@ -123,7 +238,7 @@ async function createCustomer() {
     }
     
     try {
-        const response = await fetch(`${API_URL}/customers`, {
+        const response = await authFetch(`${API_URL}/customers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -167,7 +282,7 @@ async function createTicket() {
     
     try {
         // Create ticket
-        const ticketResponse = await fetch(`${API_URL}/tickets`, {
+        const ticketResponse = await authFetch(`${API_URL}/tickets`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -186,7 +301,7 @@ async function createTicket() {
 
         // Link email if provided
         if (emailSubject) {
-            const mailResponse = await fetch(`${API_URL}/tickets/${ticket.id}/mails`, {
+            const mailResponse = await authFetch(`${API_URL}/tickets/${ticket.id}/mails`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -234,7 +349,7 @@ async function linkEmail() {
     }
     
     try {
-        const response = await fetch(`${API_URL}/tickets/${ticketId}/mails`, {
+        const response = await authFetch(`${API_URL}/tickets/${ticketId}/mails`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
