@@ -15,7 +15,11 @@ const msalConfig = {
 };
 
 const loginRequest = {
-    scopes: ['api://9635361b-5007-4fa8-8661-c78cb3a1402f/access_as_user']
+    scopes: [
+        'api://9635361b-5007-4fa8-8661-c78cb3a1402f/access_as_user',
+        'Mail.Read',
+        'Mail.ReadWrite'
+    ]
 };
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
@@ -187,6 +191,11 @@ function showTab(tabName, event) {
 
     // Clear status messages
     document.querySelectorAll('.status').forEach(s => s.style.display = 'none');
+
+    // Load emails when switching to emails tab
+    if (tabName === 'emails') {
+        loadEmails();
+    }
 }
 
 // Load customers
@@ -457,11 +466,169 @@ function showStatus(section, message, type) {
     statusEl.className = `status ${type}`;
     statusEl.textContent = message;
     statusEl.style.display = 'block';
-    
+
     // Auto-hide success messages
     if (type === 'success') {
         setTimeout(() => {
             statusEl.style.display = 'none';
         }, 5000);
+    }
+}
+
+// ===== EMAIL BROWSER FUNCTIONALITY =====
+
+const ASSISTDMS_CATEGORY = 'AssistDMS Gekoppeld';
+let emails = [];
+
+// Load emails from Outlook via Microsoft Graph
+async function loadEmails() {
+    const showLinked = document.getElementById('show-linked-emails').checked;
+
+    try {
+        document.getElementById('emails-list').innerHTML = '<div class="loading">Emails laden...</div>';
+
+        // Get token with Mail.Read scope
+        if (!accessToken) {
+            await getToken();
+        }
+
+        // Call Microsoft Graph API to get emails
+        const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me/messages?$top=50&$orderby=receivedDateTime desc&$select=id,subject,from,receivedDateTime,bodyPreview,categories,internetMessageId', {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
+
+        if (!graphResponse.ok) {
+            throw new Error(`Graph API error: ${graphResponse.status}`);
+        }
+
+        const data = await graphResponse.json();
+        emails = data.value;
+
+        // Filter based on checkbox
+        let displayEmails = emails;
+        if (!showLinked) {
+            displayEmails = emails.filter(email => !email.categories || !email.categories.includes(ASSISTDMS_CATEGORY));
+        }
+
+        renderEmails(displayEmails);
+
+    } catch (error) {
+        console.error('Load emails error:', error);
+        document.getElementById('emails-list').innerHTML = 
+            `<div class="empty-state">❌ Fout bij laden emails: ${error.message}</div>`;
+    }
+}
+
+// Render emails list
+function renderEmails(emailsList) {
+    const list = document.getElementById('emails-list');
+
+    if (emailsList.length === 0) {
+        list.innerHTML = '<div class="empty-state">📭 Geen emails gevonden</div>';
+        return;
+    }
+
+    list.innerHTML = emailsList.map(email => {
+        const isLinked = email.categories && email.categories.includes(ASSISTDMS_CATEGORY);
+        const fromEmail = email.from?.emailAddress?.address || 'Onbekend';
+        const fromName = email.from?.emailAddress?.name || fromEmail;
+        const date = new Date(email.receivedDateTime).toLocaleString('nl-NL');
+
+        return `
+            <div class="card" style="border-left-color: ${isLinked ? '#28a745' : '#667eea'}">
+                <div style="display:flex; justify-content:space-between; align-items:start;">
+                    <div style="flex:1;">
+                        <h3>${email.subject || '(Geen onderwerp)'}</h3>
+                        <p><strong>Van:</strong> ${fromName} &lt;${fromEmail}&gt;</p>
+                        <p><strong>Datum:</strong> ${date}</p>
+                        ${email.bodyPreview ? `<p style="color:#999; font-size:13px; margin-top:10px;">${email.bodyPreview.substring(0, 150)}...</p>` : ''}
+                        ${isLinked ? '<p style="color:#28a745; margin-top:10px;">✅ Gekoppeld aan ticket</p>' : ''}
+                    </div>
+                    ${!isLinked ? `
+                        <button class="btn" onclick="showLinkEmailModal('${email.id}')" style="margin-left:15px;">
+                            Koppel aan Ticket
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Show modal to link email to ticket
+async function showLinkEmailModal(emailId) {
+    const email = emails.find(e => e.id === emailId);
+    if (!email) return;
+
+    // Pre-fill the "Email Koppelen" tab
+    document.getElementById('link-email-subject').value = email.subject || '';
+    document.getElementById('link-email-id').value = email.internetMessageId || '';
+
+    // Store email ID for later use
+    window.currentEmailId = emailId;
+
+    // Switch to Email Koppelen tab
+    showTab('email');
+    document.querySelector('.tab:nth-child(5)').click();
+
+    showStatus('email', '💡 Email info ingevuld - selecteer een ticket en klik "Email Koppelen"', 'success');
+}
+
+// Modified linkEmail to add category
+const originalLinkEmail = linkEmail;
+async function linkEmail() {
+    try {
+        // Call original linkEmail function
+        await originalLinkEmail();
+
+        // If we have a currentEmailId, add category
+        if (window.currentEmailId) {
+            await addCategoryToEmail(window.currentEmailId);
+            window.currentEmailId = null;
+        }
+
+    } catch (error) {
+        throw error;
+    }
+}
+
+// Add AssistDMS category to email
+async function addCategoryToEmail(emailId) {
+    try {
+        if (!accessToken) {
+            await getToken();
+        }
+
+        // Get current categories
+        const email = emails.find(e => e.id === emailId);
+        const currentCategories = email?.categories || [];
+
+        // Add our category if not already present
+        if (!currentCategories.includes(ASSISTDMS_CATEGORY)) {
+            const newCategories = [...currentCategories, ASSISTDMS_CATEGORY];
+
+            // Update via Graph API
+            const response = await fetch(`https://graph.microsoft.com/v1.0/me/messages/${emailId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    categories: newCategories
+                })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to add category:', await response.text());
+            } else {
+                console.log('✅ Category added to email in Outlook');
+            }
+        }
+
+    } catch (error) {
+        console.error('Add category error:', error);
     }
 }
