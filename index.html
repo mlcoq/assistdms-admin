@@ -265,8 +265,11 @@
                     <input type="text" id="customer-name" placeholder="Bedrijfsnaam" required>
                 </div>
                 <div class="form-group">
-                    <label>Archief Mailbox (optioneel)</label>
-                    <input type="email" id="customer-archive" placeholder="archief@bedrijf.nl">
+                    <label>Archief Locatie (optioneel)</label>
+                    <input type="text" id="customer-archive" placeholder="assist@assistautomatisering.nl/Klanten/Bedrijfsnaam">
+                    <small style="color:#666; font-size:12px; margin-top:5px; display:block;">
+                        💡 Tip: Gebruik submappen in de gedeelde mailbox, bijv: <code>assist@assistautomatisering.nl/Klanten/BedrijfA</code>
+                    </small>
                 </div>
                 <button class="btn" onclick="createCustomer()">Klant Toevoegen</button>
             </div>
