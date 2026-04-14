@@ -35,19 +35,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function initAuth() {
     try {
         await msalInstance.initialize();
+        console.log('MSAL initialized');
 
         // Handle redirect response
         const response = await msalInstance.handleRedirectPromise();
         if (response) {
+            console.log('Login redirect response:', response);
             account = response.account;
-            await getToken();
+            // Extract access token from redirect response
+            if (response.accessToken) {
+                accessToken = response.accessToken;
+                console.log('Access token obtained from redirect');
+            } else {
+                console.log('No access token in redirect response, requesting...');
+                await getToken();
+            }
         } else {
             // Check if user is already logged in
             const accounts = msalInstance.getAllAccounts();
+            console.log('Found accounts:', accounts.length);
             if (accounts.length > 0) {
                 account = accounts[0];
+                console.log('Using existing account:', account.username);
                 await getToken();
             } else {
+                console.log('No accounts found, showing login');
                 showLoginOverlay();
                 return;
             }
@@ -55,6 +67,7 @@ async function initAuth() {
 
         // Show user info
         document.getElementById('user-info').textContent = `👤 ${account.name}`;
+        console.log('Access token available:', !!accessToken);
 
         // Load data
         loadCustomers();
@@ -83,17 +96,39 @@ async function logout() {
 }
 
 async function getToken() {
+    console.log('getToken() called, account:', account?.username);
+
+    if (!account) {
+        console.error('No account available for token request');
+        showLoginOverlay();
+        return;
+    }
+
     const tokenRequest = {
         scopes: loginRequest.scopes,
         account: account
     };
 
     try {
+        console.log('Attempting acquireTokenSilent with scopes:', tokenRequest.scopes);
         const response = await msalInstance.acquireTokenSilent(tokenRequest);
         accessToken = response.accessToken;
+        console.log('Access token acquired silently, length:', accessToken?.length);
     } catch (error) {
-        console.error('Token error:', error);
-        await msalInstance.acquireTokenRedirect(tokenRequest);
+        console.warn('Silent token acquisition failed:', error);
+
+        // Try interactive token acquisition with popup instead of redirect
+        try {
+            console.log('Attempting acquireTokenPopup...');
+            const response = await msalInstance.acquireTokenPopup(tokenRequest);
+            accessToken = response.accessToken;
+            console.log('Access token acquired via popup, length:', accessToken?.length);
+        } catch (popupError) {
+            console.error('Popup token acquisition failed:', popupError);
+            // If popup also fails, redirect as last resort
+            console.log('Falling back to redirect...');
+            await msalInstance.acquireTokenRedirect(tokenRequest);
+        }
     }
 }
 
@@ -104,7 +139,13 @@ function showLoginOverlay() {
 // Authenticated fetch wrapper
 async function authFetch(url, options = {}) {
     if (!accessToken) {
+        console.log('No access token, requesting...');
         await getToken();
+    }
+
+    if (!accessToken) {
+        console.error('Failed to obtain access token for API call');
+        throw new Error('Not authenticated - no access token available');
     }
 
     const headers = {
@@ -112,12 +153,21 @@ async function authFetch(url, options = {}) {
         'Authorization': `Bearer ${accessToken}`
     };
 
+    console.log('Making authenticated request to:', url);
     const response = await fetch(url, { ...options, headers });
 
     if (response.status === 401) {
+        console.warn('401 Unauthorized, token may be expired, requesting new token...');
         // Token expired, get new one
         await getToken();
+
+        if (!accessToken) {
+            console.error('Failed to refresh access token');
+            throw new Error('Authentication failed - unable to refresh token');
+        }
+
         headers['Authorization'] = `Bearer ${accessToken}`;
+        console.log('Retrying request with new token...');
         return fetch(url, { ...options, headers });
     }
 
