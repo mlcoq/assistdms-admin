@@ -369,12 +369,12 @@ async function createTicket() {
 
     const emailSubject = document.getElementById('email-subject').value.trim();
     const emailId = document.getElementById('email-id').value.trim();
-    
+
     if (!customerId || !subject) {
         showStatus('new-ticket', 'Klant en onderwerp zijn verplicht', 'error');
         return;
     }
-    
+
     try {
         // Create ticket
         const ticketResponse = await authFetch(`${API_URL}/tickets`, {
@@ -391,7 +391,7 @@ async function createTicket() {
             const errorText = await ticketResponse.text();
             throw new Error(`Fout bij aanmaken ticket: ${errorText}`);
         }
-        
+
         const ticket = await ticketResponse.json();
 
         // Link email if provided
@@ -409,7 +409,13 @@ async function createTicket() {
                 console.warn('Email koppelen mislukt, maar ticket is aangemaakt');
             }
         }
-        
+
+        // If we have a currentEmailId (from Email Browser), add category
+        if (window.currentEmailId) {
+            await addCategoryToEmail(window.currentEmailId);
+            window.currentEmailId = null;
+        }
+
         showStatus('new-ticket', `✅ Ticket "${subject}" aangemaakt!`, 'success');
 
         // Clear form
@@ -418,15 +424,15 @@ async function createTicket() {
         document.getElementById('ticket-description').value = '';
         document.getElementById('email-subject').value = '';
         document.getElementById('email-id').value = '';
-        
+
         // Reload tickets
         await loadTickets();
-        
+
         // Switch to tickets tab
         setTimeout(() => {
             document.querySelector('.tab').click();
         }, 2000);
-        
+
     } catch (error) {
         showStatus('new-ticket', `❌ Fout: ${error.message}`, 'error');
     }
@@ -590,9 +596,14 @@ function renderEmails(emailsList) {
                         ${isLinked ? '<p style="color:#28a745; margin-top:10px;">✅ Gekoppeld aan ticket</p>' : ''}
                     </div>
                     ${!isLinked ? `
-                        <button class="btn" onclick="showLinkEmailModal('${email.id}')" style="margin-left:15px;">
-                            Koppel aan Ticket
-                        </button>
+                        <div style="margin-left:15px; display:flex; flex-direction:column; gap:10px;">
+                            <button class="btn" onclick="createTicketFromEmail('${email.id}')" style="margin:0;">
+                                ➕ Nieuw Ticket
+                            </button>
+                            <button class="btn btn-secondary" onclick="showLinkEmailModal('${email.id}')" style="margin:0;">
+                                🔗 Koppel aan Ticket
+                            </button>
+                        </div>
                     ` : ''}
                 </div>
             </div>
@@ -617,6 +628,26 @@ async function showLinkEmailModal(emailId) {
     document.querySelector('.tab:nth-child(5)').click();
 
     showStatus('email', '💡 Email info ingevuld - selecteer een ticket en klik "Email Koppelen"', 'success');
+}
+
+// Create new ticket from email
+async function createTicketFromEmail(emailId) {
+    const email = emails.find(e => e.id === emailId);
+    if (!email) return;
+
+    // Pre-fill the "Nieuw Ticket" tab
+    document.getElementById('ticket-subject').value = email.subject || '';
+    document.getElementById('email-subject').value = email.subject || '';
+    document.getElementById('email-id').value = email.internetMessageId || '';
+
+    // Store email ID for later use (to add category after ticket creation)
+    window.currentEmailId = emailId;
+
+    // Switch to Nieuw Ticket tab
+    showTab('new-ticket');
+    document.querySelector('.tab:nth-child(2)').click();
+
+    showStatus('new-ticket', '💡 Email info ingevuld - selecteer een klant en klik "Ticket Aanmaken"', 'success');
 }
 
 // Modified linkEmail to add category
