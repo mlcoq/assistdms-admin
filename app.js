@@ -19,7 +19,8 @@ const loginRequest = {
     scopes: [
         'api://9635361b-5007-4fa8-8661-c78cb3a1402f/access_as_user',
         'Mail.Read',
-        'Mail.ReadWrite'
+        'Mail.ReadWrite',
+        'Calendars.ReadWrite'
     ]
 };
 
@@ -750,7 +751,178 @@ function showStatus(section, message, type) {
 // ===== EMAIL BROWSER FUNCTIONALITY =====
 
 const ASSISTDMS_CATEGORY = 'AssistDMS Gekoppeld';
+const ASSISTDMS_SYNC_CATEGORY = 'AssistDMS Sync';
 let emails = [];
+
+function getCalendarSyncMap() {
+    try {
+        return JSON.parse(localStorage.getItem('assistdms_calendar_sync_map') || '{}');
+    } catch {
+        return {};
+    }
+}
+
+function saveCalendarSyncMap(map) {
+    localStorage.setItem('assistdms_calendar_sync_map', JSON.stringify(map));
+}
+
+function formatGraphDateTime(date) {
+    return new Date(date).toISOString();
+}
+
+async function getCalendarToken() {
+    if (!account) {
+        return null;
+    }
+
+    const tokenRequest = {
+        scopes: ['Calendars.ReadWrite'],
+        account
+    };
+
+    try {
+        const response = await msalInstance.acquireTokenSilent(tokenRequest);
+        return response.accessToken;
+    } catch {
+        const response = await msalInstance.acquireTokenPopup(tokenRequest);
+        return response.accessToken;
+    }
+}
+
+async function syncOutlookToTimeWriterCalendar() {
+    try {
+        const graphToken = await getCalendarToken();
+        if (!graphToken) {
+            throw new Error('Geen calendar token beschikbaar.');
+        }
+
+        const start = new Date();
+        const end = new Date();
+        end.setDate(end.getDate() + 30);
+
+        const graphUrl = `https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${encodeURIComponent(formatGraphDateTime(start))}&endDateTime=${encodeURIComponent(formatGraphDateTime(end))}&$select=id,subject,start,end,categories`;
+        const graphResponse = await fetch(graphUrl, {
+            headers: { Authorization: `Bearer ${graphToken}` }
+        });
+
+        if (!graphResponse.ok) {
+            throw new Error(`Graph agenda ophalen mislukt (${graphResponse.status})`);
+        }
+
+        const graphData = await graphResponse.json();
+        const events = (graphData.value || []).filter((event) =>
+            (event.categories || []).includes(ASSISTDMS_SYNC_CATEGORY) ||
+            (event.subject || '').startsWith('[DMS]')
+        );
+
+        const map = getCalendarSyncMap();
+        let synced = 0;
+
+        for (const event of events) {
+            const startAt = new Date(event.start?.dateTime);
+            const endAt = new Date(event.end?.dateTime);
+            const durationMinutes = Math.max(1, Math.round((endAt - startAt) / 60000));
+
+            const upsertResponse = await authFetch(`${API_URL}/timewriter/bookings/upsert`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bookingId: map[event.id]?.bookingId || null,
+                    startAt: startAt.toISOString(),
+                    durationMinutes,
+                    description: event.subject || 'Agenda item'
+                })
+            });
+
+            const payload = await upsertResponse.json();
+            if (!upsertResponse.ok) {
+                continue;
+            }
+
+            map[event.id] = {
+                bookingId: payload.bookingId,
+                eventId: event.id
+            };
+            synced++;
+        }
+
+        saveCalendarSyncMap(map);
+        showStatus('onepager', `Agenda → TimeWriter klaar. Gesynct: ${synced}.`, 'success');
+    } catch (error) {
+        showStatus('onepager', `Agenda → TimeWriter fout: ${error.message}`, 'error');
+    }
+}
+
+async function syncTimeWriterToOutlookCalendar() {
+    try {
+        const graphToken = await getCalendarToken();
+        if (!graphToken) {
+            throw new Error('Geen calendar token beschikbaar.');
+        }
+
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + 30);
+
+        const response = await authFetch(`${API_URL}/timewriter/bookings?startDate=${startDate.toISOString().slice(0, 10)}&endDate=${endDate.toISOString().slice(0, 10)}`);
+        const bookings = await response.json();
+        if (!response.ok) {
+            throw new Error('TimeWriter bookings ophalen mislukt.');
+        }
+
+        const map = getCalendarSyncMap();
+        let synced = 0;
+
+        for (const booking of bookings) {
+            const bookingId = String(booking.id);
+            const startAt = new Date(booking.startAt || booking.start);
+            const endAt = new Date(startAt.getTime() + (booking.durationMinutes || booking.duration || 60) * 60000);
+            const subject = `[TW:${bookingId}] ${booking.description || 'TimeWriter booking'}`;
+
+            const mappedEventId = Object.entries(map).find(([, value]) => String(value.bookingId) === bookingId)?.[0];
+            const eventPayload = {
+                subject,
+                categories: [ASSISTDMS_SYNC_CATEGORY],
+                start: { dateTime: startAt.toISOString(), timeZone: 'UTC' },
+                end: { dateTime: endAt.toISOString(), timeZone: 'UTC' }
+            };
+
+            if (mappedEventId) {
+                await fetch(`https://graph.microsoft.com/v1.0/me/events/${mappedEventId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        Authorization: `Bearer ${graphToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(eventPayload)
+                });
+                synced++;
+                continue;
+            }
+
+            const createResponse = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${graphToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(eventPayload)
+            });
+
+            if (createResponse.ok) {
+                const created = await createResponse.json();
+                map[created.id] = { bookingId, eventId: created.id };
+                synced++;
+            }
+        }
+
+        saveCalendarSyncMap(map);
+        showStatus('onepager', `TimeWriter → Agenda klaar. Gesynct: ${synced}.`, 'success');
+    } catch (error) {
+        showStatus('onepager', `TimeWriter → Agenda fout: ${error.message}`, 'error');
+    }
+}
 
 // Load emails from Outlook via Microsoft Graph
 async function loadEmails() {
