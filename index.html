@@ -327,6 +327,17 @@
                         <input type="text" id="onepager-email-id" placeholder="internetMessageId" />
                     </div>
                     <button class="btn" onclick="createOnepagerTicket()">Ticket maken</button>
+
+                    <hr style="margin:14px 0; border:0; border-top:1px solid #ddd;" />
+                    <h4 style="margin-bottom:8px;">Agent-assist (suggesties)</h4>
+                    <p style="font-size:13px; color:#666; margin-bottom:10px;">Geeft alleen een voorstel. Jij beslist altijd zelf.</p>
+                    <div class="form-group">
+                        <label>Mailtekst / klantvraag</label>
+                        <textarea id="onepager-agent-input" rows="4" placeholder="Plak hier de klantvraag of mailinhoud"></textarea>
+                    </div>
+                    <button class="btn" onclick="runOnepagerAssistant()">Genereer voorstel</button>
+                    <div id="onepager-agent-output" style="margin-top:10px; font-size:13px; color:#333;"></div>
+                    <button class="btn btn-secondary" style="margin-top:10px;" onclick="applyOnepagerSuggestion()">Gebruik voorstel in ticket</button>
                 </div>
 
                 <div class="card">

@@ -778,6 +778,44 @@ function showStatus(section, message, type) {
 const ASSISTDMS_CATEGORY = 'AssistDMS Gekoppeld';
 const ASSISTDMS_SYNC_CATEGORY = 'AssistDMS Sync';
 let emails = [];
+let lastOnepagerSuggestion = null;
+
+function pickSuggestionStatus(text) {
+    const value = text.toLowerCase();
+    if (value.includes('wacht') || value.includes('in afwachting') || value.includes('terugkoppeling')) {
+        return 'Wachten op klant';
+    }
+    if (value.includes('plan') || value.includes('afspraak') || value.includes('morgen') || value.includes('volgende week')) {
+        return 'Inplannen';
+    }
+    if (value.includes('klaar') || value.includes('opgelost') || value.includes('afgerond')) {
+        return 'Archiveren';
+    }
+    return 'Afhandelen';
+}
+
+function summarizeTitle(text) {
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    if (!cleaned) {
+        return 'Klantvraag';
+    }
+
+    const sentence = cleaned.split(/[.!?]/)[0].trim();
+    return sentence.length > 80 ? `${sentence.slice(0, 77)}...` : sentence;
+}
+
+function deriveNextStep(status) {
+    if (status === 'Wachten op klant') {
+        return 'Stuur korte terugvraag en zet herinnering op 2 werkdagen.';
+    }
+    if (status === 'Inplannen') {
+        return 'Zet een agenda-item en koppel dit ticket aan de afspraak.';
+    }
+    if (status === 'Archiveren') {
+        return 'Controleer uren, archiveer mail en sluit ticket af.';
+    }
+    return 'Start direct en zet tijdschrijven aan bij begin van het werk.';
+}
 
 function getCalendarSyncMap() {
     try {
@@ -785,6 +823,46 @@ function getCalendarSyncMap() {
     } catch {
         return {};
     }
+}
+
+function runOnepagerAssistant() {
+    const input = document.getElementById('onepager-agent-input').value.trim();
+    if (!input) {
+        showStatus('onepager', 'Plak eerst mailtekst of klantvraag.', 'error');
+        return;
+    }
+
+    const title = summarizeTitle(input);
+    const status = pickSuggestionStatus(input);
+    const nextStep = deriveNextStep(status);
+
+    lastOnepagerSuggestion = { title, status, nextStep };
+
+    const output = document.getElementById('onepager-agent-output');
+    output.innerHTML = `
+        <div class="card" style="margin:0; border-left-color:#198754; background:#f3fbf6;">
+            <strong>Voorstel titel:</strong> ${title}<br/>
+            <strong>Voorstel status:</strong> ${status}<br/>
+            <strong>Volgende stap:</strong> ${nextStep}
+        </div>
+    `;
+
+    showStatus('onepager', 'Voorstel gemaakt. Controleer en klik dan op "Gebruik voorstel in ticket".', 'success');
+}
+
+function applyOnepagerSuggestion() {
+    if (!lastOnepagerSuggestion) {
+        showStatus('onepager', 'Eerst een voorstel genereren.', 'error');
+        return;
+    }
+
+    document.getElementById('onepager-title').value = lastOnepagerSuggestion.title;
+    const existing = document.getElementById('onepager-email-subject').value.trim();
+    if (!existing) {
+        document.getElementById('onepager-email-subject').value = lastOnepagerSuggestion.title;
+    }
+
+    showStatus('onepager', `Voorstel toegepast (${lastOnepagerSuggestion.status}).`, 'success');
 }
 
 function saveCalendarSyncMap(map) {
