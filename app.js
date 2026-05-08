@@ -480,6 +480,12 @@ async function syncCustomersFromTimeWriter(silent = false) {
 
             if (!response.ok) {
                 lastError = payload?.message || payload?.error || rawBody || `HTTP ${response.status}`;
+
+                // No credentials on backend: retrying other aspect types will never help.
+                if (String(lastError).toLowerCase().includes('sleutelconfiguratie ontbreekt')) {
+                    throw new Error('TimeWriter keys ontbreken op de server. Zet Railway variabelen TimeWriter__ApiKey en TimeWriter__UserKey.');
+                }
+
                 continue;
             }
 
