@@ -499,6 +499,23 @@ async function syncCustomersFromTimeWriter(silent = false) {
 
         throw new Error(lastError);
     } catch (error) {
+        try {
+            const diagResponse = await authFetch(`${API_URL}/timewriter/connection-test`);
+            const diagBody = await diagResponse.text();
+            let diag = null;
+            try {
+                diag = diagBody ? JSON.parse(diagBody) : null;
+            } catch {
+                diag = null;
+            }
+
+            if (diag && diag.message) {
+                error = new Error(`${error.message} | Diagnose: ${diag.message}`);
+            }
+        } catch {
+            // Ignore diagnostic fetch failures.
+        }
+
         if (!silent) {
             showStatus('onepager', `Klantimport fout: ${error.message}`, 'error');
         }
