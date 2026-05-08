@@ -7,7 +7,11 @@ const API_CONFIG = {
 
     // Externe tijdschrijfapp (optioneel, opent in nieuwe tab)
     // Voorbeeld: 'https://tijdschrijven.jouwdomein.nl'
-    timeWriterUrl: ''
+    timeWriterUrl: '',
+
+    // TimeWriter aspectType used to import customer list
+    // Veel installaties gebruiken IT_AT1 als klantdimension
+    timeWriterCustomerAspectType: 'IT_AT1'
 
     // Voor lokaal testen (alleen op je eigen machine):
     // baseUrl: 'http://localhost:5001'

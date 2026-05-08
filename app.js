@@ -27,6 +27,7 @@ const msalInstance = new msal.PublicClientApplication(msalConfig);
 let accessToken = null;
 let account = null;
 const TIMEWRITER_URL = (API_CONFIG.timeWriterUrl || '').trim();
+const TIMEWRITER_CUSTOMER_ASPECT = (API_CONFIG.timeWriterCustomerAspectType || 'IT_AT1').trim();
 
 // State
 let customers = [];
@@ -284,6 +285,15 @@ async function loadCustomers() {
     try {
         const response = await authFetch(`${API_URL}/customers`);
         customers = await response.json();
+
+        // Auto-import klanten uit TimeWriter bij lege lokale lijst.
+        if (customers.length === 0) {
+            const imported = await syncCustomersFromTimeWriter(true);
+            if (imported) {
+                const refreshed = await authFetch(`${API_URL}/customers`);
+                customers = await refreshed.json();
+            }
+        }
         
         renderCustomers();
         populateCustomerSelect();
@@ -436,6 +446,32 @@ function renderOnepagerTicketList() {
 function refreshOnepager() {
     loadCustomers();
     loadTickets();
+}
+
+async function syncCustomersFromTimeWriter(silent = false) {
+    try {
+        const response = await authFetch(`${API_URL}/customers/sync/timewriter?aspectType=${encodeURIComponent(TIMEWRITER_CUSTOMER_ASPECT)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload?.message || 'Klantimport mislukt.');
+        }
+
+        if (!silent) {
+            showStatus('onepager', `Klantimport klaar. Nieuw: ${payload.created || 0}, totaal: ${payload.totalCustomers || 0}.`, 'success');
+            await loadCustomers();
+        }
+
+        return true;
+    } catch (error) {
+        if (!silent) {
+            showStatus('onepager', `Klantimport fout: ${error.message}`, 'error');
+        }
+        return false;
+    }
 }
 
 async function createOnepagerTicket() {
