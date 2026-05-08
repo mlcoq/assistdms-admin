@@ -29,6 +29,7 @@ let accessToken = null;
 let account = null;
 const TIMEWRITER_URL = (API_CONFIG.timeWriterUrl || '').trim();
 const TIMEWRITER_CUSTOMER_ASPECT = (API_CONFIG.timeWriterCustomerAspectType || 'IT_AT1').trim();
+let attemptedAutoCustomerImport = false;
 
 // State
 let customers = [];
@@ -288,7 +289,8 @@ async function loadCustomers() {
         customers = await response.json();
 
         // Auto-import klanten uit TimeWriter bij lege lokale lijst.
-        if (customers.length === 0) {
+        if (customers.length === 0 && !attemptedAutoCustomerImport) {
+            attemptedAutoCustomerImport = true;
             const imported = await syncCustomersFromTimeWriter(true);
             if (imported) {
                 const refreshed = await authFetch(`${API_URL}/customers`);
@@ -450,23 +452,46 @@ function refreshOnepager() {
 }
 
 async function syncCustomersFromTimeWriter(silent = false) {
+    const aspectCandidates = [
+        TIMEWRITER_CUSTOMER_ASPECT,
+        'IT_AT1',
+        'IT_AT2',
+        'IT_AT3',
+        'IT_AT4',
+        'IT_AT5'
+    ].filter((value, index, all) => value && all.indexOf(value) === index);
+
+    let lastError = 'Onbekende fout bij klantimport.';
+
     try {
-        const response = await authFetch(`${API_URL}/customers/sync/timewriter?aspectType=${encodeURIComponent(TIMEWRITER_CUSTOMER_ASPECT)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
+        for (const aspectType of aspectCandidates) {
+            const response = await authFetch(`${API_URL}/customers/sync/timewriter?aspectType=${encodeURIComponent(aspectType)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
 
-        const payload = await response.json();
-        if (!response.ok) {
-            throw new Error(payload?.message || 'Klantimport mislukt.');
+            const rawBody = await response.text();
+            let payload = null;
+            try {
+                payload = rawBody ? JSON.parse(rawBody) : null;
+            } catch {
+                payload = null;
+            }
+
+            if (!response.ok) {
+                lastError = payload?.message || payload?.error || rawBody || `HTTP ${response.status}`;
+                continue;
+            }
+
+            if (!silent) {
+                showStatus('onepager', `Klantimport klaar (${aspectType}). Nieuw: ${payload?.created || 0}, totaal: ${payload?.totalCustomers || 0}.`, 'success');
+                await loadCustomers();
+            }
+
+            return true;
         }
 
-        if (!silent) {
-            showStatus('onepager', `Klantimport klaar. Nieuw: ${payload.created || 0}, totaal: ${payload.totalCustomers || 0}.`, 'success');
-            await loadCustomers();
-        }
-
-        return true;
+        throw new Error(lastError);
     } catch (error) {
         if (!silent) {
             showStatus('onepager', `Klantimport fout: ${error.message}`, 'error');
