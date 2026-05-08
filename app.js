@@ -25,6 +25,7 @@ const loginRequest = {
 const msalInstance = new msal.PublicClientApplication(msalConfig);
 let accessToken = null;
 let account = null;
+const TIMEWRITER_URL = (API_CONFIG.timeWriterUrl || '').trim();
 
 // State
 let customers = [];
@@ -32,8 +33,19 @@ let tickets = [];
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+    registerServiceWorker();
     await initAuth();
 });
+
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+        return;
+    }
+
+    navigator.serviceWorker.register('sw.js').catch((error) => {
+        console.warn('Service worker registratie mislukt:', error);
+    });
+}
 
 // Authentication
 async function initAuth() {
@@ -72,6 +84,7 @@ async function initAuth() {
         // Hide login overlay and show user info
         document.getElementById('login-overlay').style.display = 'none';
         document.getElementById('user-info').textContent = `👤 ${account.name}`;
+        updateTimeWriterButton();
         console.log('Access token available:', !!accessToken);
 
         // Load data
@@ -176,6 +189,24 @@ function showLoginOverlay() {
     document.getElementById('login-overlay').style.display = 'flex';
 }
 
+function updateTimeWriterButton() {
+    const button = document.getElementById('timewriter-btn');
+    if (!button) {
+        return;
+    }
+
+    button.style.display = TIMEWRITER_URL ? 'inline-flex' : 'none';
+}
+
+function openTimeWriter() {
+    if (!TIMEWRITER_URL) {
+        showStatus('tickets', 'Configureer eerst API_CONFIG.timeWriterUrl in config.js', 'error');
+        return;
+    }
+
+    window.open(TIMEWRITER_URL, '_blank', 'noopener,noreferrer');
+}
+
 // Authenticated fetch wrapper
 async function authFetch(url, options = {}) {
     if (!accessToken) {
@@ -231,6 +262,20 @@ function showTab(tabName, event) {
     if (tabName === 'emails') {
         loadEmails();
     }
+
+    if (tabName === 'onepager') {
+        refreshOnepager();
+    }
+}
+
+function activateTab(tabName) {
+    showTab(tabName);
+    const button = Array.from(document.querySelectorAll('.tab')).find((tab) =>
+        (tab.getAttribute('onclick') || '').includes(`'${tabName}'`)
+    );
+    if (button) {
+        button.classList.add('active');
+    }
 }
 
 // Load customers
@@ -241,6 +286,7 @@ async function loadCustomers() {
         
         renderCustomers();
         populateCustomerSelect();
+        populateOnepagerCustomerSelect();
     } catch (error) {
         showStatus('customers', `Fout bij laden klanten: ${error.message}`, 'error');
     }
@@ -254,6 +300,8 @@ async function loadTickets() {
         
         renderTickets();
         populateTicketSelect();
+        populateOnepagerTicketSelect();
+        renderOnepagerTicketList();
     } catch (error) {
         document.getElementById('tickets-list').innerHTML = 
             `<div class="empty-state">❌ Fout bij laden: ${error.message}</div>`;
@@ -288,20 +336,28 @@ function renderTickets() {
     
     list.innerHTML = tickets.map(ticket => {
         const customer = customers.find(c => c.id === ticket.customerId);
-        const statusClass = ticket.status === 'Open' ? 'open' : 
-                          ticket.status === 'Closed' ? 'closed' : 'archived';
+        const statusValue = (ticket.status || '').toLowerCase();
+        const statusClass = statusValue === 'open' || statusValue === 'inprogress'
+            ? 'open'
+            : statusValue === 'closed'
+                ? 'closed'
+                : 'archived';
+        const statusLabel = ticket.status || 'Onbekend';
+        const pendingArchive = ticket.pendingArchiveMails || 0;
+        const hasHours = !!ticket.hasWrittenHours;
+        const createdAt = ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString('nl-NL') : '-';
         
         return `
             <div class="card">
-                <h3>${ticket.subject}</h3>
+                <h3>${ticket.number || ''} ${ticket.title || '(Geen titel)'}</h3>
                 <p><strong>Klant:</strong> ${customer ? customer.name : 'Onbekend'}</p>
-                <p><strong>Aangemaakt:</strong> ${new Date(ticket.createdAt).toLocaleDateString('nl-NL')}</p>
+                <p><strong>Aangemaakt:</strong> ${createdAt}</p>
                 <p>
-                    <span class="badge ${statusClass}">${ticket.status}</span>
-                    ${ticket.mailsCount > 0 ? `<span class="badge" style="background:#007bff;color:white">📧 ${ticket.mailsCount} emails</span>` : ''}
-                    ${ticket.totalHours > 0 ? `<span class="badge" style="background:#ffc107;color:#000">⏱️ ${ticket.totalHours}u</span>` : ''}
+                    <span class="badge ${statusClass}">${statusLabel}</span>
+                    ${pendingArchive > 0 ? `<span class="badge" style="background:#dc3545;color:white">📦 ${pendingArchive} archiveren</span>` : ''}
+                    ${hasHours ? '<span class="badge" style="background:#ffc107;color:#000">⏱️ uren aanwezig</span>' : ''}
                 </p>
-                ${ticket.description ? `<p style="color:#666;font-size:14px">${ticket.description}</p>` : ''}
+                ${ticket.isBillingOverdue ? '<p style="color:#dc3545;font-size:14px">⚠️ Facturatie aandacht nodig</p>' : ''}
             </div>
         `;
     }).join('');
@@ -314,12 +370,150 @@ function populateCustomerSelect() {
         customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 }
 
+function populateOnepagerCustomerSelect() {
+    const select = document.getElementById('onepager-customer-select');
+    if (!select) {
+        return;
+    }
+
+    select.innerHTML = '<option value="">Selecteer klant...</option>' +
+        customers.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
 function populateTicketSelect() {
     const select = document.getElementById('ticket-select');
-    const openTickets = tickets.filter(t => t.status === 'Open');
+    const activeTickets = tickets.filter(t => {
+        const status = (t.status || '').toLowerCase();
+        return status === 'open' || status === 'inprogress';
+    });
     
     select.innerHTML = '<option value="">Selecteer ticket...</option>' +
-        openTickets.map(t => `<option value="${t.id}">${t.subject}</option>`).join('');
+        activeTickets.map(t => `<option value="${t.id}">${t.number || ''} - ${t.title || '(Geen titel)'}</option>`).join('');
+}
+
+function populateOnepagerTicketSelect() {
+    const select = document.getElementById('onepager-ticket-select');
+    if (!select) {
+        return;
+    }
+
+    const activeTickets = tickets.filter(t => {
+        const status = (t.status || '').toLowerCase();
+        return status === 'open' || status === 'inprogress';
+    });
+
+    select.innerHTML = '<option value="">Selecteer ticket...</option>' +
+        activeTickets.map(t => `<option value="${t.id}">${t.number || ''} - ${t.title || '(Geen titel)'}</option>`).join('');
+}
+
+function renderOnepagerTicketList() {
+    const list = document.getElementById('onepager-ticket-list');
+    if (!list) {
+        return;
+    }
+
+    const activeTickets = tickets
+        .filter(t => {
+            const status = (t.status || '').toLowerCase();
+            return status === 'open' || status === 'inprogress';
+        })
+        .slice(0, 10);
+
+    if (activeTickets.length === 0) {
+        list.innerHTML = '<div class="onepager-item">Nog geen open tickets</div>';
+        return;
+    }
+
+    list.innerHTML = activeTickets.map((ticket) => `
+        <div class="onepager-item">
+            <strong>${ticket.number || ''} ${ticket.title || ''}</strong><br/>
+            <small>Status: ${ticket.status || '-'}${ticket.isBillingOverdue ? ' | Facturatie aandacht' : ''}</small>
+        </div>
+    `).join('');
+}
+
+function refreshOnepager() {
+    loadCustomers();
+    loadTickets();
+}
+
+async function createOnepagerTicket() {
+    const customerId = document.getElementById('onepager-customer-select').value;
+    const title = document.getElementById('onepager-title').value.trim();
+    const emailSubject = document.getElementById('onepager-email-subject').value.trim();
+    const emailId = document.getElementById('onepager-email-id').value.trim();
+
+    if (!customerId || !title) {
+        showStatus('onepager', 'Klant en titel zijn verplicht.', 'error');
+        return;
+    }
+
+    try {
+        const ticketResponse = await authFetch(`${API_URL}/tickets`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                CustomerId: customerId,
+                Title: title,
+                ArchiveMailboxOverride: null
+            })
+        });
+
+        if (!ticketResponse.ok) {
+            const errorText = await ticketResponse.text();
+            throw new Error(errorText || 'Ticket kon niet worden aangemaakt.');
+        }
+
+        const ticket = await ticketResponse.json();
+
+        if (emailSubject) {
+            await authFetch(`${API_URL}/tickets/${ticket.id}/mails`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    Subject: emailSubject,
+                    OutlookMessageId: emailId || null
+                })
+            });
+        }
+
+        document.getElementById('onepager-title').value = '';
+        document.getElementById('onepager-email-subject').value = '';
+        document.getElementById('onepager-email-id').value = '';
+        document.getElementById('onepager-ticket-select').value = ticket.id;
+
+        showStatus('onepager', `Ticket ${ticket.number || ''} aangemaakt.`, 'success');
+        await loadTickets();
+    } catch (error) {
+        showStatus('onepager', `Fout: ${error.message}`, 'error');
+    }
+}
+
+async function syncOnepagerTicket() {
+    const ticketId = document.getElementById('onepager-ticket-select').value;
+    if (!ticketId) {
+        showStatus('onepager', 'Selecteer eerst een ticket.', 'error');
+        return;
+    }
+
+    try {
+        const response = await authFetch(`${API_URL}/tickets/${ticketId}/timewriter/sync`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload?.message || 'Synchronisatie mislukt.');
+        }
+
+        const synced = payload?.synced ?? 0;
+        const failed = payload?.failed ?? 0;
+        showStatus('onepager', `Sync klaar. Gelukt: ${synced}, fout: ${failed}.`, failed > 0 ? 'error' : 'success');
+        await loadTickets();
+    } catch (error) {
+        showStatus('onepager', `Sync fout: ${error.message}`, 'error');
+    }
 }
 
 // Create customer
@@ -624,8 +818,7 @@ async function showLinkEmailModal(emailId) {
     window.currentEmailId = emailId;
 
     // Switch to Email Koppelen tab
-    showTab('email');
-    document.querySelector('.tab:nth-child(5)').click();
+    activateTab('email');
 
     showStatus('email', '💡 Email info ingevuld - selecteer een ticket en klik "Email Koppelen"', 'success');
 }
@@ -644,8 +837,7 @@ async function createTicketFromEmail(emailId) {
     window.currentEmailId = emailId;
 
     // Switch to Nieuw Ticket tab
-    showTab('new-ticket');
-    document.querySelector('.tab:nth-child(2)').click();
+    activateTab('new-ticket');
 
     showStatus('new-ticket', '💡 Email info ingevuld - selecteer een klant en klik "Ticket Aanmaken"', 'success');
 }

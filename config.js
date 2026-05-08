@@ -3,7 +3,11 @@
 
 const API_CONFIG = {
     // Production API (Railway hosting):
-    baseUrl: 'https://assistdms-production.up.railway.app'
+    baseUrl: 'https://assistdms-production.up.railway.app',
+
+    // Externe tijdschrijfapp (optioneel, opent in nieuwe tab)
+    // Voorbeeld: 'https://tijdschrijven.jouwdomein.nl'
+    timeWriterUrl: ''
 
     // Voor lokaal testen (alleen op je eigen machine):
     // baseUrl: 'http://localhost:5001'

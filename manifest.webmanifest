@@ -1,0 +1,21 @@
+{
+  "name": "AssistDMS",
+  "short_name": "AssistDMS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f3f8ff",
+  "theme_color": "#0b5cab",
+  "lang": "nl",
+  "icons": [
+    {
+      "src": "icon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-80.png",
+      "sizes": "80x80",
+      "type": "image/png"
+    }
+  ]
+}

@@ -37,6 +37,10 @@
 - `taskpane.js` - JavaScript logica
 - `commands.html` - Command functies
 - `manifest.xml` - Outlook configuratie (moet nog aangepast!)
+- `index.html` - Standalone webapp voor mobiel en pc
+- `app.js` - Standalone webapp logica (Azure AD + API)
+- `manifest.webmanifest` - PWA installatiebestand
+- `sw.js` - Service worker voor snelle app-shell loading
 - `icon-*.png` - Iconen
 
 ## Let op:
@@ -48,3 +52,25 @@ De API moet ook online! Opties:
 - Ngrok (tijdelijk voor testen)
 
 Of gebruik voor nu localhost en test alleen op je eigen machine.
+
+## Werken op mobiel en pc
+
+Gebruik de standalone webapp via je GitHub Pages URL:
+
+- `https://JOUWNAAM.github.io/assistdms-addin/index.html`
+
+Op mobiel kun je deze installeren als app:
+
+1. Open de URL in Safari of Chrome.
+2. Kies `Voeg toe aan beginscherm` of `Install app`.
+3. Log in met Microsoft en werk verder zoals op pc.
+
+### Extern tijdschrijfprogramma gebruiken
+
+In `config.js` kun je je bestaande tijdschrijftool invullen:
+
+```js
+timeWriterUrl: 'https://jouw-tijdschrijfapp.nl'
+```
+
+Daarna verschijnt de knop `Open tijdschrijven` in de header, zowel op mobiel als pc.
