@@ -1,12 +1,13 @@
 // AssistDMS Standalone Web App with Azure AD Authentication
 const API_URL = API_CONFIG.baseUrl;
+const REDIRECT_URI = new URL('.', window.location.href).href;
 
 // MSAL Configuration
 const msalConfig = {
     auth: {
         clientId: '9635361b-5007-4fa8-8661-c78cb3a1402f',
         authority: 'https://login.microsoftonline.com/e2e6f0bc-a094-4bb3-9250-1975a8102eeb',
-        redirectUri: window.location.origin + window.location.pathname
+        redirectUri: REDIRECT_URI
     },
     cache: {
         cacheLocation: 'localStorage',
